@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Click Battle – System Repair</title>
+
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="game-root">
+    <!-- =========================
+         1) 인트로 화면
+       ========================= -->
+    <section id="intro-screen" class="screen active">
+      <div class="intro-inner">
+        <!-- data-text 추가 -->
+        <h1 class="logo-glitch" data-text="SYSTEM REPAIR PROTOCOL">
+          SYSTEM<br>REPAIR<br>PROTOCOL
+        </h1>
+
+        <p class="intro-text">
+          붕괴된 네온 시스템에 접속했습니다.<br>
+          당신의 클릭으로 오류를 임시 복구해주세요.
+        </p>
+
+        <button id="start-btn" class="neon-btn">
+          클릭으로 진입하기
+        </button>
+
+        <p class="sub-hint">
+          한 번 들어오면, 쉽게 나가기 힘들 수 있습니다.
+        </p>
+      </div>
+    </section>
+
+    <!-- =========================
+         2) 플레이 화면 (미션들)
+       ========================= -->
+    <section id="game-screen" class="screen">
+      <!-- 상단 상태바 -->
+      <header class="top-bar">
+        <div class="status-left">
+          <span class="badge">CLICK BATTLE</span>
+          <span class="small-label" id="mission-label">
+            M1 · 회로 연결
+          </span>
+        </div>
+
+        <div class="status-right">
+          <div class="counter-block">
+            <span class="counter-label">TOTAL CLICKS</span>
+            <span class="counter-value" id="total-clicks">0</span>
+          </div>
+        </div>
+      </header>
+
+      <!-- 미션 내용 + 인터랙션 무대 -->
+      <main class="stage-wrapper">
+        <!-- 미션 텍스트 영역 -->
+        <section class="mission-text">
+          <h2 id="mission-title">회로를 복구하세요</h2>
+          <p id="mission-desc">
+            끊어진 네온 회로에 전류를 계속 흘려보내세요.<br>
+            버튼을 반복해서 클릭해 회로를 점등시키면 다음 단계가 열립니다.
+          </p>
+        </section>
+
+        <!-- 실제 클릭 인터랙션이 벌어지는 "무대" -->
+        <section id="stage" class="stage">
+          <!-- 기본 클릭 타겟 -->
+          <button id="main-target" class="click-target">
+            <span class="target-label">TAP</span>
+          </button>
+        </section>
+      </main>
+
+      <!-- 하단 미션 진행 표시 / 다음 버튼 -->
+      <footer class="bottom-bar">
+        <div class="mission-progress">
+          <span class="progress-label">MISSION</span>
+          <span id="mission-index">1</span>
+          <span>/</span>
+          <span id="mission-total">10</span>
+        </div>
+
+        <button id="next-btn" class="ghost-btn" disabled>
+          다음 시스템으로
+        </button>
+      </footer>
+    </section>
+
+    <!-- =========================
+         3) 엔딩 / 요약 화면
+       ========================= -->
+    <section id="end-screen" class="screen">
+      <div class="end-inner">
+        <h2 class="end-title">SESSION COMPLETE</h2>
+        <p class="end-text">
+          당신이 남긴 총 클릭 수:
+          <span id="final-clicks" class="end-clicks">0</span>
+        </p>
+
+        <p class="end-sub">
+          이 시스템은 완전히 복구되지 않았습니다.<br>
+          다시 접속하여 추가 수리를 진행할 수 있습니다.
+        </p>
+
+        <button id="restart-btn" class="neon-btn">
+          다시 수리 시작
+        </button>
+      </div>
+    </section>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
