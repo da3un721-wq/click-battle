@@ -1,3 +1,6 @@
+ClickBattle.init("DANI"); // 자기 닉네임
+ClickBattle.recordClick();
+
 // =============================
 //  System Repair - Click Battle
 //  기본 게임 로직
@@ -233,3 +236,5 @@ document.addEventListener("DOMContentLoaded", () => {
   // 처음에는 인트로 화면 보여주기
   showScreen("intro");
 });
+
+
