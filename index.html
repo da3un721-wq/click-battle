@@ -4,8 +4,9 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Click Battle – System Repair</title>
+<script src="https://clickbattle2025.web.app/click-battle.js"></script>
+<script>ClickBattle.init("DANI");</script>
   <link rel="stylesheet" href="style.css" />
-  <script src="https://clickbattle2025.web.app/click-battle.js"></script>
 </head>
 <body>
   <div id="game-root">
@@ -14,7 +15,6 @@
        ========================= -->
     <section id="intro-screen" class="screen active">
       <div class="intro-inner">
-        <!-- data-text 추가 -->
         <h1 class="logo-glitch" data-text="SYSTEM REPAIR PROTOCOL">
           SYSTEM<br>REPAIR<br>PROTOCOL
         </h1>
@@ -68,14 +68,14 @@
 
         <!-- 실제 클릭 인터랙션이 벌어지는 "무대" -->
         <section id="stage" class="stage">
-          <!-- 기본 클릭 타겟 -->
+          <!-- 기본 클릭 타겟 (공통) -->
           <button id="main-target" class="click-target">
             <span class="target-label">TAP</span>
           </button>
         </section>
       </main>
 
-      <!-- 하단 미션 진행 표시 / 다음 버튼 -->
+      <!-- 하단 미션 진행 표시 (버튼 없음, 텍스트만) -->
       <footer class="bottom-bar">
         <div class="mission-progress">
           <span class="progress-label">MISSION</span>
@@ -83,10 +83,6 @@
           <span>/</span>
           <span id="mission-total">10</span>
         </div>
-
-        <button id="next-btn" class="ghost-btn" disabled>
-          다음 시스템으로
-        </button>
       </footer>
     </section>
 
