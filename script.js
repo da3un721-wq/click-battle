@@ -1,435 +1,595 @@
-// =============================
-//  System Repair - Click Battle
-//  미션 훅 + M1 회로 복구 커스텀 로직
-// =============================
-document.addEventListener("DOMContentLoaded", () => {
-  // ---- DOM 요소 가져오기 ----
-  const introScreen   = document.getElementById("intro-screen");
-  const gameScreen    = document.getElementById("game-screen");
-  const endScreen     = document.getElementById("end-screen");
+// --- 화면 / 버튼 DOM ---
+const introScreen    = document.getElementById('intro-screen');
+const tutorialScreen = document.getElementById('tutorial-screen');
+const gameScreen     = document.getElementById('game-screen');
 
-  const startBtn      = document.getElementById("start-btn");
-  const restartBtn    = document.getElementById("restart-btn");
+const introStartBtn  = document.getElementById('intro-start-btn');
+const tutorialStartGameBtn = document.getElementById('tutorial-start-game-btn');
+const quitToMenuBtn  = document.getElementById('quit-to-menu-btn');
 
-  const stage         = document.getElementById("stage");
-  const mainTarget    = document.getElementById("main-target");
-  const totalClicksEl = document.getElementById("total-clicks");
-  const finalClicksEl = document.getElementById("final-clicks");
+const statusText     = document.getElementById('status-text');
+const turnInfoText   = document.getElementById('turn-info');
 
-  const missionLabel   = document.getElementById("mission-label");
-  const missionTitle   = document.getElementById("mission-title");
-  const missionDesc    = document.getElementById("mission-desc");
-  const missionIndexEl = document.getElementById("mission-index");
-  const missionTotalEl = document.getElementById("mission-total");
+const carrotLeftBtn  = document.getElementById('btn-carrot-left');
+const carrotRightBtn = document.getElementById('btn-carrot-right');
+const bunnyBtn       = document.getElementById('btn-bunny');
 
-  const targetLabelEl  = mainTarget.querySelector(".target-label");
+const gameCircle     = document.getElementById('game-circle');
+const slots          = Array.from(gameCircle.querySelectorAll('.player-slot'));
+const passIndicator  = document.getElementById('pass-indicator');
 
-  // ---- 상태값 ----
-  let totalClicks       = 0;
-  let currentMissionIdx = -1;    // 아직 로드된 미션 없음
-  let missionClickCount = 0;
-  let missionCompleted  = false;
+const gameOverOverlay = document.getElementById('game-over-overlay');
+const gameOverText    = document.getElementById('game-over-text');
+const restartBtn      = document.getElementById('restart-btn');
 
-  // ---- M1(회로)에서 쓸 전류 게이지 상태 ----
-  let circuitCharge     = 0;     // 0.0 ~ 1.0
-  let circuitDrainTimer = null;
+// 리듬 텍스트
+const beatTop    = document.getElementById('beat-top');
+const beatBottom = document.getElementById('beat-bottom');
 
-  // =============================
-  //  미션 데이터 정의
-  // =============================
-  const missions = [
-    {
-      id: "M1",
-      short: "회로 연결",
-      title: "회로를 복구하세요",
-      desc: "끊어진 네온 회로에 전류를 계속 흘려보내세요.<br>버튼을 반복해서 클릭해 회로를 점등시키면 다음 단계가 열립니다.",
-      // 클릭 수는 통계용만, 클리어는 전류 게이지로
-      clicksToComplete: 9999,
-      targetText: "CHARGE",
-      stageClass: "mission-circuit",
-      autoCompleteByCount: false,  // ✅ 이 미션은 클릭 수로 자동 클리어 X
+// --- 게임 상태 ---
+const numPlayers   = 7;
+const playerIndex  = 6; // 플레이어
 
-      onEnter({ stage, mainTarget, missionIndex }) {
-        circuitCharge = 0;
-        stage.style.setProperty("--circuit-level", "0");
+/*
+  index → 캐릭터
 
-        // STAGE CLEAR 오버레이 혹시 남아 있으면 제거
-        const oldClear = stage.querySelector(".stage-clear-message");
-        if (oldClear) oldClear.remove();
+  0: NPC1
+  1: NPC2
+  2: NPC3
+  3: NPC4
+  4: NPC5
+  5: NPC6
+  6: Player (아래 중앙)
 
-        // 버튼 다시 보이게
-        mainTarget.style.display = "";
+  시계 방향 순서: 2 → 3 → 4 → 5 → 6 → 0 → 1 → (다시 2)
 
-        // 회로 라인 레이어 추가 (기존 있으면 제거)
-        const existing = stage.querySelector(".circuit-lines");
-        if (existing) existing.remove();
+  그래서 이웃(양 옆)은:
 
-        const lines = document.createElement("div");
-        lines.className = "circuit-lines";
-        lines.innerHTML = `
-          <div class="circuit-line h h1"></div>
-          <div class="circuit-line h h2"></div>
-          <div class="circuit-line h h3"></div>
-          <div class="circuit-line v v1"></div>
-          <div class="circuit-line v v2"></div>
-          <div class="circuit-line v v3"></div>
-        `;
-        stage.insertBefore(lines, mainTarget);
+  - NPC1(0): NPC2(1), Player(6)
+  - Player(6): NPC1(0), NPC6(5)
+  - NPC3(2): NPC2(1), NPC4(3)
+*/
 
-        stage.classList.remove("circuit-on");
+const leftNeighbor = {
+  2: 1,
+  3: 2,
+  4: 3,
+  5: 4,
+  6: 5,
+  0: 6,
+  1: 0
+};
 
-        // 전류 감소 타이머
-        if (circuitDrainTimer) {
-          clearInterval(circuitDrainTimer);
-          circuitDrainTimer = null;
-        }
+const rightNeighbor = {
+  2: 3,
+  3: 4,
+  4: 5,
+  5: 6,
+  6: 0,
+  0: 1,
+  1: 2
+};
 
-        circuitDrainTimer = setInterval(() => {
-          if (currentMissionIdx !== missionIndex || missionCompleted) return;
+let currentBunny   = 2;  // 시작용(나중에 랜덤으로 바뀜)
+let prevBunny      = 2;
+let currentTurn    = 0;
 
-          circuitCharge = Math.max(0, circuitCharge - 0.02);
-          stage.style.setProperty("--circuit-level", circuitCharge.toString());
-        }, 120);
-      },
+let gameRunning       = false;
+let requiredAction    = 'none'; // 'none' | 'bunny' | 'carrot'
+let carrotStage       = 0;      // 0: 아직, 1: 왼쪽 성공, 2: 양쪽 성공
+let bunnyPressed      = false;
+let selectingTarget   = false;
 
-      onClick({ stage, mainTarget, completeMission }) {
-        if (missionCompleted) return;
+let currentTimeoutId      = null;
+let carrotHighlightTimer  = null;
 
-        circuitCharge = Math.min(1, circuitCharge + 0.08);
-        stage.style.setProperty("--circuit-level", circuitCharge.toString());
+// 템포 (느리게 시작 → 서서히 빨라지게)
+let baseInterval   = 2200;
+let currentInterval= 2200;
+const minInterval  = 800;
+const speedFactor  = 0.96;
 
-        if (circuitCharge >= 0.98 && !missionCompleted) {
-          missionCompleted = true;
+// 비트(리듬) 표시용
+let beatPhase   = 0;   // 0: 없음, 1: 첫 타이밍, 2: 두 번째 타이밍
+let beatTimer1  = null;
+let beatTimer2  = null;
 
-          // 회로 ON 효과
-          stage.classList.add("circuit-on");
+// ---- 화면 전환 ----
+function showScreen(screen) {
+  [introScreen, tutorialScreen, gameScreen].forEach(s => s.classList.remove('active'));
+  screen.classList.add('active');
 
-          // 버튼 숨기고 중앙에 STAGE CLEAR 텍스트
-          mainTarget.style.display = "none";
-
-          let clear = stage.querySelector(".stage-clear-message");
-          if (!clear) {
-            clear = document.createElement("div");
-            clear.className = "stage-clear-message";
-            clear.innerHTML = `
-              <div class="clear-title">STAGE CLEAR</div>
-              <div class="clear-sub">회로가 점등되었습니다.</div>
-              <div class="clear-hint">다음 시스템으로 이동 중...</div>
-            `;
-            stage.appendChild(clear);
-          }
-
-          setTimeout(() => {
-            completeMission();
-          }, 900);
-        }
-      },
-
-      onLeave({ stage, mainTarget }) {
-        const lines = stage.querySelector(".circuit-lines");
-        if (lines) lines.remove();
-
-        const clear = stage.querySelector(".stage-clear-message");
-        if (clear) clear.remove();
-
-        if (circuitDrainTimer) {
-          clearInterval(circuitDrainTimer);
-          circuitDrainTimer = null;
-        }
-
-        stage.classList.remove("circuit-on");
-        stage.style.removeProperty("--circuit-level");
-
-        // 버튼 다시 복구 (다음 미션에서 쓸 수 있게)
-        mainTarget.style.display = "";
-      }
-    },
-
-    // 이하 미션 2~10: 지금은 골격만, 추후 연출 넣을 예정
-    {
-      id: "M2",
-      short: "글리치 제거",
-      title: "화면의 글리치를 제거하세요",
-      desc: "노이즈와 깨진 픽셀을 제거하기 위해 빠르게 클릭하세요.<br>잔상이 사라질수록 시스템이 안정화됩니다.",
-      clicksToComplete: 30,
-      targetText: "FIX",
-      stageClass: "mission-glitch",
-
-      onEnter() {},
-      onClick() {},
-      onLeave() {}
-    },
-    {
-      id: "M3",
-      short: "전력 누수",
-      title: "전력 누수를 막으세요",
-      desc: "전력이 새어 나가고 있습니다.<br>버튼을 연속해서 눌러 누수를 일시적으로 억제하세요.",
-      clicksToComplete: 35,
-      targetText: "SEAL",
-      stageClass: "mission-leak",
-
-      onEnter() {},
-      onClick() {},
-      onLeave() {}
-    },
-    {
-      id: "M4",
-      short: "AI 눈 뜨기",
-      title: "잠든 AI를 깨우세요",
-      desc: "AI의 눈에 신호를 주입하세요.<br>충분한 클릭이 모이면 눈이 완전히 떠집니다.",
-      clicksToComplete: 40,
-      targetText: "PING",
-      stageClass: "mission-ai",
-
-      onEnter() {},
-      onClick() {},
-      onLeave() {}
-    },
-    {
-      id: "M5",
-      short: "부품 재조립",
-      title: "흩어진 부품들을 다시 모으세요",
-      desc: "버튼을 클릭해 자석처럼 부품을 끌어당기세요.<br>충분한 수의 부품이 모이면 다음 단계로 이동합니다.",
-      clicksToComplete: 30,
-      targetText: "PULL",
-      stageClass: "mission-parts",
-
-      onEnter() {},
-      onClick() {},
-      onLeave() {}
-    },
-    {
-      id: "M6",
-      short: "데이터 누락",
-      title: "누락된 데이터를 채우세요",
-      desc: "비어 있는 데이터 슬롯에 신호를 채워 넣으세요.<br>지속적인 입력이 필요합니다.",
-      clicksToComplete: 35,
-      targetText: "FILL",
-      stageClass: "mission-data",
-
-      onEnter() {},
-      onClick() {},
-      onLeave() {}
-    },
-    {
-      id: "M7",
-      short: "냉각 과부하",
-      title: "과열된 시스템을 식히세요",
-      desc: "열기를 식히기 위해 버튼을 계속 눌러 냉각 장치를 가동하세요.",
-      clicksToComplete: 40,
-      targetText: "COOL",
-      stageClass: "mission-cool",
-
-      onEnter() {},
-      onClick() {},
-      onLeave() {}
-    },
-    {
-      id: "M8",
-      short: "색상 시스템",
-      title: "잃어버린 색을 복구하세요",
-      desc: "흑백이 된 인터페이스에 색을 되돌려주세요.<br>클릭할수록 색상 데이터가 회복됩니다.",
-      clicksToComplete: 35,
-      targetText: "COLOR",
-      stageClass: "mission-color",
-
-      onEnter() {},
-      onClick() {},
-      onLeave() {}
-    },
-    {
-      id: "M9",
-      short: "보안 장벽",
-      title: "보안 장벽을 해제하세요",
-      desc: "잠겨 있는 네온 락을 흔들어 여세요.<br>충분히 많은 클릭이 축적되면 잠금이 풀립니다.",
-      clicksToComplete: 45,
-      targetText: "UNLOCK",
-      stageClass: "mission-lock",
-
-      onEnter() {},
-      onClick() {},
-      onLeave() {}
-    },
-    {
-      id: "M10",
-      short: "최종 안정화",
-      title: "시스템을 임시 안정화합니다",
-      desc: "마지막으로 전체 시스템을 안정화하기 위해 신호를 주입하세요.<br>완전한 복구는 아니지만, 잠시 숨을 고를 수 있습니다.",
-      clicksToComplete: 50,
-      targetText: "STABILIZE",
-      stageClass: "mission-final",
-
-      onEnter() {},
-      onClick() {},
-      onLeave() {}
-    }
-  ];
-
-  missionTotalEl.textContent = missions.length.toString();
-
-  // =============================
-  //  화면 전환
-  // =============================
-  function showScreen(screenName) {
-    introScreen.classList.remove("active");
-    gameScreen.classList.remove("active");
-    endScreen.classList.remove("active");
-
-    if (screenName === "intro") {
-      introScreen.classList.add("active");
-    } else if (screenName === "game") {
-      gameScreen.classList.add("active");
-    } else if (screenName === "end") {
-      endScreen.classList.add("active");
-    }
+  if (screen === tutorialScreen || screen === gameScreen) {
+    setTimeout(layoutCircles, 0);
   }
+}
 
-  function resetGameState() {
-    totalClicks       = 0;
-    currentMissionIdx = -1;
-    missionClickCount = 0;
-    missionCompleted  = false;
+// ---- 캐릭터 배치 ----
+// NPC들은 반원/타원 형태로, 플레이어는 아래 중앙 고정
+function layoutCircles() {
+  const circles = document.querySelectorAll('.circle');
 
-    totalClicksEl.textContent = "0";
-    finalClicksEl.textContent = "0";
+  // NPC 각도 맵 (조금 더 정돈된 형태)
+  // 위: 2 / 우상단:3 / 우중간:4 / 우하단:5 / 좌하단:0 / 좌상단:1
+  const npcAngles = {
+    2: -90,
+    3: -40,
+    4: 0,
+    5: 40,
+    0: 140,
+    1: 200
+  };
 
-    if (circuitDrainTimer) {
-      clearInterval(circuitDrainTimer);
-      circuitDrainTimer = null;
-    }
+  circles.forEach(circle => {
+    const children = Array.from(circle.querySelectorAll('.player-slot'));
+    const rect = circle.getBoundingClientRect();
+    const w = rect.width  || 340;
+    const h = rect.height || 280;
+    const cx = w / 2;
+    const cy = h / 2;
+    const rx = w * 0.38;
+    const ry = h * 0.34;
 
-    // 버튼 다시 보이게 (안전장치)
-    mainTarget.style.display = "";
-  }
+    children.forEach(slot => {
+      const idx = Number(slot.dataset.pos);
 
-  // =============================
-  //  미션 세팅 / 진행
-  // =============================
-  function loadMission(index) {
-    const mission = missions[index];
-    if (!mission) return;
-
-    // 이전 미션 정리 (onLeave)
-    if (currentMissionIdx !== -1) {
-      const prevMission = missions[currentMissionIdx];
-      if (prevMission && typeof prevMission.onLeave === "function") {
-        prevMission.onLeave({
-          stage,
-          mainTarget,
-          missionIndex: currentMissionIdx,
-          mission: prevMission
-        });
-      }
-    }
-
-    currentMissionIdx = index;
-    missionClickCount = 0;
-    missionCompleted  = false;
-
-    // 공통 UI 텍스트 업데이트
-    missionLabel.textContent   = `${mission.id} · ${mission.short}`;
-    missionTitle.textContent   = mission.title;
-    missionDesc.innerHTML      = mission.desc;
-    missionIndexEl.textContent = (index + 1).toString();
-    targetLabelEl.textContent  = mission.targetText || "TAP";
-
-    // stage 클래스 (미션별 테마 적용)
-    stage.className = "stage";
-    if (mission.stageClass) {
-      stage.classList.add(mission.stageClass);
-    }
-
-    // 혹시 남아 있는 STAGE CLEAR 메시지 제거
-    const oldClear = stage.querySelector(".stage-clear-message");
-    if (oldClear) oldClear.remove();
-
-    // 버튼 다시 보이게
-    mainTarget.style.display = "";
-
-    // 미션 전용 onEnter 호출
-    if (typeof mission.onEnter === "function") {
-      mission.onEnter({
-        stage,
-        mainTarget,
-        missionIndex: index,
-        mission
-      });
-    }
-  }
-
-  function completeMission() {
-    missionCompleted = true;
-
-    mainTarget.classList.add("completed");
-    setTimeout(() => {
-      mainTarget.classList.remove("completed");
-    }, 300);
-
-    setTimeout(() => {
-      const nextIndex = currentMissionIdx + 1;
-
-      if (nextIndex >= missions.length) {
-        finalClicksEl.textContent = totalClicks.toString();
-        showScreen("end");
+      // 플레이어는 아래 중앙 고정
+      if (idx === playerIndex) {
+        const px = cx;
+        const py = cy + ry * 0.95;
+        slot.style.left = `${px}px`;
+        slot.style.top  = `${py}px`;
         return;
       }
 
-      loadMission(nextIndex);
-    }, 600);
+      const deg = npcAngles[idx];
+      if (deg === undefined) return;
+
+      const rad = deg * Math.PI / 180;
+      const x = cx + rx * Math.cos(rad);
+      const y = cy + ry * Math.sin(rad);
+
+      slot.style.left = `${x}px`;
+      slot.style.top  = `${y}px`;
+    });
+  });
+}
+
+// ---- 이모티콘 표시 ----
+function resetSlotsEmoji() {
+  slots.forEach(slot => {
+    const idx = Number(slot.dataset.pos);
+    slot.textContent = '😀';
+    slot.classList.remove('is-bunny', 'is-carrot', 'player');
+    if (idx === playerIndex) {
+      slot.classList.add('player');
+    }
+  });
+}
+
+function updateRolesVisual() {
+  resetSlotsEmoji();
+
+  // 바니
+  const bunnySlot = slots[currentBunny];
+  if (bunnySlot) {
+    bunnySlot.textContent = '🐰';
+    bunnySlot.classList.add('is-bunny');
   }
 
-  function handleClick() {
-    const mission = missions[currentMissionIdx];
-    if (!mission || missionCompleted) return; // 클리어 컷씬 중에는 무시
+  // 양 옆 당근
+  const leftIdx  = leftNeighbor[currentBunny];
+  const rightIdx = rightNeighbor[currentBunny];
 
-    totalClicks++;
-    totalClicksEl.textContent = totalClicks.toString();
+  [leftIdx, rightIdx].forEach(idx => {
+    if (idx === undefined) return;
+    const s = slots[idx];
+    if (!s) return;
+    s.textContent = '🥕';
+    s.classList.add('is-carrot');
+  });
+}
 
-    missionClickCount++;
+// ---- 패스 애니메이션용 ----
+function animatePass(fromIdx, toIdx) {
+  if (fromIdx === toIdx) return;
+  const fromSlot = slots[fromIdx];
+  const toSlot   = slots[toIdx];
+  if (!fromSlot || !toSlot) return;
 
-    const progress = mission.clicksToComplete
-      ? missionClickCount / mission.clicksToComplete
-      : 0;
+  const circleRect = gameCircle.getBoundingClientRect();
+  const fromRect   = fromSlot.getBoundingClientRect();
+  const toRect     = toSlot.getBoundingClientRect();
 
-    if (typeof mission.onClick === "function") {
-      mission.onClick({
-        stage,
-        mainTarget,
-        missionIndex: currentMissionIdx,
-        missionClickCount,
-        progress,
-        mission,
-        totalClicks,
-        completeMission
-      });
-    }
+  const fromX = fromRect.left + fromRect.width / 2 - circleRect.left;
+  const fromY = fromRect.top  + fromRect.height / 2 - circleRect.top;
+  const toX   = toRect.left   + toRect.width   / 2 - circleRect.left;
+  const toY   = toRect.top    + toRect.height  / 2 - circleRect.top;
 
-    const autoByCount = mission.autoCompleteByCount !== false;
-    if (
-      autoByCount &&
-      !missionCompleted &&
-      mission.clicksToComplete &&
-      missionClickCount >= mission.clicksToComplete
-    ) {
-      completeMission();
-    }
+  // 시작 위치 세팅
+  passIndicator.style.transition = 'none';
+  passIndicator.style.opacity = '1';
+  passIndicator.style.left = `${fromX}px`;
+  passIndicator.style.top  = `${fromY}px`;
+
+  // 다음 프레임부터 이동
+  requestAnimationFrame(() => {
+    passIndicator.style.transition =
+      'left 0.35s ease-out, top 0.35s ease-out, opacity 0.35s ease-out';
+    passIndicator.style.left = `${toX}px`;
+    passIndicator.style.top  = `${toY}px`;
+    passIndicator.style.opacity = '0';
+  });
+}
+
+// ---- 버튼 상태 ----
+function resetButtonsHighlight() {
+  [carrotLeftBtn, carrotRightBtn, bunnyBtn].forEach(btn => {
+    btn.classList.remove('highlight', 'disabled');
+  });
+}
+
+function disableAllControls(disabled = true) {
+  const method = disabled ? 'add' : 'remove';
+  [carrotLeftBtn, carrotRightBtn, bunnyBtn].forEach(btn => {
+    btn.classList[method]('disabled');
+  });
+}
+
+// 당근 하이라이트 (왼쪽 → 오른쪽 순서)
+function updateCarrotHighlight(stage) {
+  carrotLeftBtn.classList.remove('highlight');
+  carrotRightBtn.classList.remove('highlight');
+
+  if (stage === 0) {
+    carrotLeftBtn.classList.add('highlight');   // 왼쪽 먼저
+  } else if (stage === 1) {
+    carrotRightBtn.classList.add('highlight');  // 이후 오른쪽
+  }
+}
+
+// ---- 비트(리듬) 텍스트 ----
+function clearBeatTimers() {
+  if (beatTimer1) {
+    clearTimeout(beatTimer1);
+    beatTimer1 = null;
+  }
+  if (beatTimer2) {
+    clearTimeout(beatTimer2);
+    beatTimer2 = null;
+  }
+}
+
+function updateBeatDisplay(phase) {
+  beatPhase = phase;
+
+  if (!beatTop || !beatBottom) return;
+
+  if (phase === 0) {
+    beatTop.textContent = '';
+    beatBottom.textContent = '';
+    beatTop.className = 'beat-text beat-top';
+    beatBottom.className = 'beat-text beat-bottom';
+    return;
   }
 
-  // =============================
-  //  이벤트 연결
-  // =============================
-  startBtn.addEventListener("click", () => {
-    resetGameState();
-    loadMission(0);
-    showScreen("game");
-  });
+  // 공통 텍스트
+  beatTop.textContent = '바니바니';
+  beatBottom.textContent = '당근';
 
-  mainTarget.addEventListener("click", handleClick);
+  // 색상/스타일
+  if (phase === 1) {
+    beatTop.className = 'beat-text beat-top phase1'; // 핑크
+  } else {
+    beatTop.className = 'beat-text beat-top phase2'; // 빨강
+  }
+  beatBottom.className = 'beat-text beat-bottom';
+}
 
-  restartBtn.addEventListener("click", () => {
-    resetGameState();
-    showScreen("intro");
-  });
+// ---- 게임 오버 ----
+function gameOver(reason = '실패했습니다!') {
+  gameRunning = false;
+  requiredAction = 'none';
+  selectingTarget = false;
 
-  showScreen("intro");
+  if (currentTimeoutId) {
+    clearTimeout(currentTimeoutId);
+    currentTimeoutId = null;
+  }
+  if (carrotHighlightTimer) {
+    clearTimeout(carrotHighlightTimer);
+    carrotHighlightTimer = null;
+  }
+
+  clearBeatTimers();
+  updateBeatDisplay(0);
+
+  gameOverText.textContent = `${reason}\n턴: ${currentTurn}`;
+  gameOverOverlay.classList.add('active');
+  statusText.textContent = '게임 오버...';
+}
+
+// ---- 다음 턴 예약 ----
+function scheduleNextTurn(forcedNextBunny = null) {
+  if (!gameRunning) return;
+  currentTurn++;
+
+  if (currentInterval > minInterval) {
+    currentInterval = Math.max(minInterval, currentInterval * speedFactor);
+  }
+
+  turnInfoText.textContent = `턴: ${currentTurn} | 속도: ${(currentInterval / 1000).toFixed(2)}초`;
+
+  const doStartTurn = () => startTurn(forcedNextBunny);
+  currentTimeoutId = setTimeout(doStartTurn, currentInterval * 0.25);
+}
+
+// ---- 턴 시작 ----
+function startTurn(forcedNextBunny = null) {
+  if (!gameRunning) return;
+
+  if (currentTimeoutId) {
+    clearTimeout(currentTimeoutId);
+    currentTimeoutId = null;
+  }
+  if (carrotHighlightTimer) {
+    clearTimeout(carrotHighlightTimer);
+    carrotHighlightTimer = null;
+  }
+
+  resetButtonsHighlight();
+
+  prevBunny = currentBunny;
+
+  if (forcedNextBunny !== null && forcedNextBunny !== undefined) {
+    currentBunny = forcedNextBunny;
+  } else {
+    // 다음 바니 랜덤 (현재와 같지는 않게)
+    let next;
+    do {
+      next = Math.floor(Math.random() * numPlayers);
+    } while (next === currentBunny);
+    currentBunny = next;
+  }
+
+  animatePass(prevBunny, currentBunny);
+  updateRolesVisual();
+
+  // --- 이번 턴 리듬 텍스트(바니바니/당근) 표시 ---
+  clearBeatTimers();
+  updateBeatDisplay(1); // 첫 타이밍: 바니바니(핑크) / 당근(주황)
+
+  // 중간쯤에 2타이밍(빨간 바니바니)으로 변경
+  beatTimer1 = setTimeout(() => {
+    if (!gameRunning) return;
+    updateBeatDisplay(2);
+  }, currentInterval * 0.5);
+
+  // 턴이 거의 끝날 때 텍스트 잠깐 꺼주기
+  beatTimer2 = setTimeout(() => {
+    if (!gameRunning) return;
+    updateBeatDisplay(0);
+  }, currentInterval * 1.1);
+
+  const leftIdx  = leftNeighbor[currentBunny];
+  const rightIdx = rightNeighbor[currentBunny];
+
+  if (currentBunny === playerIndex) {
+    // --- 내가 바니 ---
+    requiredAction  = 'bunny';
+    bunnyPressed    = false;
+    selectingTarget = false;
+    carrotStage     = 0;
+
+    statusText.textContent = '너 차례! 🐰 버튼을 누르고, 다음 바니로 만들 얼굴을 탭해!';
+    disableAllControls(false);
+    bunnyBtn.classList.add('highlight');
+
+    currentTimeoutId = setTimeout(() => {
+      if (!gameRunning) return;
+      if (!bunnyPressed) {
+        gameOver('바니바니를 제때 누르지 못했어요!');
+      } else {
+        gameOver('지목할 사람을 선택하지 못했어요!');
+      }
+    }, currentInterval * 1.3);
+
+  } else if (playerIndex === leftIdx || playerIndex === rightIdx) {
+    // --- 내가 당근 자리 ---
+    requiredAction = 'carrot';
+    carrotStage    = 0;
+    bunnyPressed   = false;
+    selectingTarget = false;
+
+    statusText.textContent = '당근당근! 🥕 왼쪽 → 🥕 오른쪽 순서로 눌러!';
+    disableAllControls(false);
+
+    // 왼쪽 먼저 하이라이트
+    updateCarrotHighlight(0);
+    carrotHighlightTimer = setTimeout(() => {
+      if (!gameRunning || requiredAction !== 'carrot') return;
+      updateCarrotHighlight(1); // 오른쪽 하이라이트
+    }, currentInterval * 0.5);
+
+    currentTimeoutId = setTimeout(() => {
+      if (!gameRunning) return;
+      if (carrotStage < 2) {
+        gameOver('당근당근을 제대로 하지 못했어요!');
+      } else {
+        scheduleNextTurn();
+      }
+    }, currentInterval);
+
+  } else {
+    // --- 아무 역할도 아님 ---
+    requiredAction = 'none';
+    bunnyPressed   = false;
+    carrotStage    = 0;
+    selectingTarget = false;
+
+    statusText.textContent = '지켜보는 중... 지금은 아무것도 누르지 마!';
+    disableAllControls(false);
+
+    currentTimeoutId = setTimeout(() => {
+      if (!gameRunning) return;
+      scheduleNextTurn();
+    }, currentInterval);
+  }
+}
+
+// ---- 버튼 이벤트 ----
+
+// 바니 버튼
+bunnyBtn.addEventListener('click', () => {
+  if (!gameRunning) return;
+  if (requiredAction !== 'bunny') {
+    gameOver('지금은 바니바니 차례가 아니에요!');
+    return;
+  }
+  if (bunnyPressed) return;
+
+  bunnyPressed = true;
+  selectingTarget = true;
+  statusText.textContent = '좋아! 이제 다음 바니로 만들 얼굴을 탭해!';
 });
+
+// 당근 왼쪽
+carrotLeftBtn.addEventListener('click', () => {
+  if (!gameRunning) return;
+  if (requiredAction !== 'carrot') {
+    gameOver('지금은 당근당근 차례가 아니에요!');
+    return;
+  }
+  if (carrotStage !== 0) {
+    gameOver('당근은 왼쪽 → 오른쪽 순서로 눌러야 해요!');
+    return;
+  }
+  carrotStage = 1;
+  updateCarrotHighlight(1); // 오른쪽 하이라이트
+  statusText.textContent = '좋아! 이제 오른쪽 당근을 눌러!';
+});
+
+// 당근 오른쪽
+carrotRightBtn.addEventListener('click', () => {
+  if (!gameRunning) return;
+  if (requiredAction !== 'carrot') {
+    gameOver('지금은 당근당근 차례가 아니에요!');
+    return;
+  }
+  if (carrotStage !== 1) {
+    gameOver('당근은 왼쪽 → 오른쪽 순서로 눌러야 해요!');
+    return;
+  }
+  carrotStage = 2;
+  updateCarrotHighlight(2); // 둘 다 off
+  statusText.textContent = '완벽한 당근당근! 🥕';
+
+  if (currentTimeoutId) {
+    clearTimeout(currentTimeoutId);
+    currentTimeoutId = null;
+  }
+  scheduleNextTurn();
+});
+
+// 얼굴 클릭 → 바니인 경우에만 지목
+slots.forEach(slot => {
+  slot.addEventListener('click', () => {
+    if (!gameRunning) return;
+    const idx = Number(slot.dataset.pos);
+
+    if (requiredAction === 'bunny' && bunnyPressed && selectingTarget) {
+      if (idx === playerIndex) {
+        statusText.textContent = '자기 자신에게는 지목할 수 없어요!';
+        return;
+      }
+
+      selectingTarget = false;
+
+      if (currentTimeoutId) {
+        clearTimeout(currentTimeoutId);
+        currentTimeoutId = null;
+      }
+
+      statusText.textContent = `${idx}번 자리에 바니를 넘겼다!`;
+      scheduleNextTurn(idx);
+      return;
+    }
+
+    // 그 외 상황의 얼굴 탭은 그냥 무시
+  });
+});
+
+// ---- 메뉴 / 흐름 ----
+introStartBtn.addEventListener('click', () => {
+  showScreen(tutorialScreen);
+});
+
+tutorialStartGameBtn.addEventListener('click', () => {
+  showScreen(gameScreen);
+  startGame();
+});
+
+quitToMenuBtn.addEventListener('click', () => {
+  gameRunning = false;
+  if (currentTimeoutId) {
+    clearTimeout(currentTimeoutId);
+    currentTimeoutId = null;
+  }
+  if (carrotHighlightTimer) {
+    clearTimeout(carrotHighlightTimer);
+    carrotHighlightTimer = null;
+  }
+  clearBeatTimers();
+  updateBeatDisplay(0);
+  gameOverOverlay.classList.remove('active');
+  showScreen(introScreen);
+});
+
+restartBtn.addEventListener('click', () => {
+  gameOverOverlay.classList.remove('active');
+  startGame();
+});
+
+// ---- 게임 시작 ----
+function startGame() {
+  layoutCircles();
+  resetSlotsEmoji();
+
+  gameRunning     = true;
+  currentTurn     = 0;
+  baseInterval    = 2200;
+  currentInterval = baseInterval;
+  requiredAction  = 'none';
+  carrotStage     = 0;
+  bunnyPressed    = false;
+  selectingTarget = false;
+
+  if (currentTimeoutId) {
+    clearTimeout(currentTimeoutId);
+    currentTimeoutId = null;
+  }
+  if (carrotHighlightTimer) {
+    clearTimeout(carrotHighlightTimer);
+    carrotHighlightTimer = null;
+  }
+
+  clearBeatTimers();
+  updateBeatDisplay(0);
+
+  gameOverOverlay.classList.remove('active');
+  statusText.textContent = '게임 시작! 누가 첫 바니가 될까?';
+  turnInfoText.textContent = '턴: 0 | 속도: -';
+
+  // 첫 바니는 NPC들 중 한 명 (플레이어 제외)
+  let first;
+  do {
+    first = Math.floor(Math.random() * numPlayers);
+  } while (first === playerIndex);
+  currentBunny = first;
+  prevBunny    = first;
+  updateRolesVisual();
+
+  // 바로 첫 턴 시작
+  startTurn(currentBunny);
+}
+
