@@ -27,51 +27,47 @@ const beatTop    = document.getElementById('beat-top');
 const beatBottom = document.getElementById('beat-bottom');
 
 // --- 게임 상태 ---
-const numPlayers   = 7;
-const playerIndex  = 6; // 플레이어
+// ✅ 5명(4 NPC + Player)
+const numPlayers   = 5;
+const playerIndex  = 4; // 플레이어 (아래 중앙)
 
 /*
   index → 캐릭터
 
-  0: NPC1
-  1: NPC2
-  2: NPC3
-  3: NPC4
-  4: NPC5
-  5: NPC6
-  6: Player (아래 중앙)
+  0: NPC1 (좌측 하단)
+  1: NPC2 (좌측 상단)
+  2: NPC3 (우측 상단)
+  3: NPC4 (우측 하단)
+  4: Player (아래 중앙)
 
-  시계 방향 순서: 2 → 3 → 4 → 5 → 6 → 0 → 1 → (다시 2)
+  이웃(양 옆):
 
-  그래서 이웃(양 옆)은:
-
-  - NPC1(0): NPC2(1), Player(6)
-  - Player(6): NPC1(0), NPC6(5)
-  - NPC3(2): NPC2(1), NPC4(3)
+  npc1(0): player(4), npc2(1)
+  npc2(1): npc1(0), npc3(2)
+  npc3(2): npc2(1), npc4(3)
+  npc4(3): npc3(2), player(4)
+  player(4): npc1(0), npc4(3)
 */
 
+// ✅ 이웃 맵 수정
 const leftNeighbor = {
-  2: 1,
-  3: 2,
-  4: 3,
-  5: 4,
-  6: 5,
-  0: 6,
-  1: 0
+  0: 4, // npc1의 왼쪽 이웃: player
+  1: 0, // npc2의 왼쪽 이웃: npc1
+  2: 1, // npc3의 왼쪽 이웃: npc2
+  3: 2, // npc4의 왼쪽 이웃: npc3
+  4: 3  // player의 왼쪽 이웃: npc4
 };
 
 const rightNeighbor = {
-  2: 3,
-  3: 4,
-  4: 5,
-  5: 6,
-  6: 0,
-  0: 1,
-  1: 2
+  0: 1, // npc1의 오른쪽 이웃: npc2
+  1: 2, // npc2의 오른쪽 이웃: npc3
+  2: 3, // npc3의 오른쪽 이웃: npc4
+  3: 4, // npc4의 오른쪽 이웃: player
+  4: 0  // player의 오른쪽 이웃: npc1
 };
 
-let currentBunny   = 2;  // 시작용(나중에 랜덤으로 바뀜)
-let prevBunny      = 2;
+let currentBunny   = 1;  // 시작용
+let prevBunny      = 1;
 let currentTurn    = 0;
 
 let gameRunning       = false;
@@ -84,11 +80,11 @@ let currentTimeoutId      = null;
 let carrotHighlightTimer  = null;
 
 // 템포 (느리게 시작 → 서서히 빨라지게)
-// ✅ 속도 조정: 2200 → 1800, 800 → 650, 0.96 → 0.94
-let baseInterval   = 1800;
-let currentInterval= 1800;
-const minInterval  = 650;
-const speedFactor  = 0.94;
+// 🔻 속도 살짝 다운 (이전 1800/650/0.94 → 조금 느리게)
+let baseInterval   = 2000;
+let currentInterval= 2000;
+const minInterval  = 800;
+const speedFactor  = 0.95;
 
 // 비트(리듬) 표시용
 let beatPhase   = 0;   // 0: 없음, 1: 첫 타이밍, 2: 두 번째 타이밍
@@ -106,19 +102,16 @@ function showScreen(screen) {
 }
 
 // ---- 캐릭터 배치 ----
-// NPC들은 반원/타원 형태로, 플레이어는 아래 중앙 고정
+// NPC1 (좌하단), NPC2(좌상단), NPC3(우상단), NPC4(우하단), Player(아래 중앙)
 function layoutCircles() {
   const circles = document.querySelectorAll('.circle');
 
-  // NPC 각도 맵 (조금 더 정돈된 형태)
-  // 위: 2 / 우상단:3 / 우중간:4 / 우하단:5 / 좌하단:0 / 좌상단:1
+  // ✅ 각도 재설정
   const npcAngles = {
-    2: -90,
-    3: -40,
-    4: 0,
-    5: 40,
-    0: 140,
-    1: 200
+    0: 140,   // npc1: 좌측 하단
+    1: -140,  // npc2: 좌측 상단
+    2: -40,   // npc3: 우측 상단
+    3: 40     // npc4: 우측 하단
   };
 
   circles.forEach(circle => {
@@ -322,7 +315,7 @@ function scheduleNextTurn(forcedNextBunny = null) {
   turnInfoText.textContent = `턴: ${currentTurn} | 속도: ${(currentInterval / 1000).toFixed(2)}초`;
 
   const doStartTurn = () => startTurn(forcedNextBunny);
-  // ✅ 속도 조정: 0.25 → 0.15
+  // (여긴 그대로 둠) 텀: 0.15배
   currentTimeoutId = setTimeout(doStartTurn, currentInterval * 0.15);
 }
 
@@ -559,8 +552,7 @@ function startGame() {
 
   gameRunning     = true;
   currentTurn     = 0;
-  // ✅ 속도 조정: 2200 → 1800
-  baseInterval    = 1800;
+  baseInterval    = 2000;
   currentInterval = baseInterval;
   requiredAction  = 'none';
   carrotStage     = 0;
@@ -583,7 +575,7 @@ function startGame() {
   statusText.textContent = '게임 시작! 누가 첫 바니가 될까?';
   turnInfoText.textContent = '턴: 0 | 속도: -';
 
-  // 첫 바니는 NPC들 중 한 명 (플레이어 제외)
+  // 첫 바니는 플레이어를 제외한 NPC들 중 한 명
   let first;
   do {
     first = Math.floor(Math.random() * numPlayers);
@@ -595,4 +587,5 @@ function startGame() {
   // 바로 첫 턴 시작
   startTurn(currentBunny);
 }
+
 

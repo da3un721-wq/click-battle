@@ -21,7 +21,7 @@ body {
 #app {
   width: 100%;
   max-width: 430px;
-  height: 100vh;               /* 화면 세로 꽉 */
+  height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -69,7 +69,7 @@ body {
   background: #ff9c6a;
 }
 
-/* 인트로 화면 타이포 */
+/* 인트로 텍스트 */
 .intro-inner {
   display: flex;
   flex-direction: column;
@@ -193,6 +193,21 @@ body {
   pointer-events: none;
 }
 
+/* 패스 애니메이션용 토끼 */
+#pass-indicator {
+  position: absolute;
+  width: 40px;
+  height: 40px;
+  font-size: 32px;
+  pointer-events: none;
+  opacity: 0;
+  left: 0;
+  top: 0;
+  transform: translate(-50%, -50%);
+  filter: drop-shadow(0 0 12px rgba(255,255,255,0.9));
+  z-index: 5;
+}
+
 /* 게임오버 오버레이 */
 .overlay {
   position: absolute;
@@ -264,19 +279,4 @@ body {
 /* 2타이밍: 빨강 */
 .beat-top.phase2 {
   color: #ff4b4b;
-}
-
-/* 패스 애니메이션용 토끼 */
-#pass-indicator {
-  position: absolute;
-  width: 40px;
-  height: 40px;
-  font-size: 32px;
-  pointer-events: none;
-  opacity: 0;
-  left: 0;
-  top: 0;
-  transform: translate(-50%, -50%);
-  filter: drop-shadow(0 0 12px rgba(255,255,255,0.9));
-  z-index: 5;
 }
