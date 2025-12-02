@@ -84,10 +84,11 @@ let currentTimeoutId      = null;
 let carrotHighlightTimer  = null;
 
 // 템포 (느리게 시작 → 서서히 빨라지게)
-let baseInterval   = 2200;
-let currentInterval= 2200;
-const minInterval  = 800;
-const speedFactor  = 0.96;
+// ✅ 속도 조정: 2200 → 1800, 800 → 650, 0.96 → 0.94
+let baseInterval   = 1800;
+let currentInterval= 1800;
+const minInterval  = 650;
+const speedFactor  = 0.94;
 
 // 비트(리듬) 표시용
 let beatPhase   = 0;   // 0: 없음, 1: 첫 타이밍, 2: 두 번째 타이밍
@@ -321,7 +322,8 @@ function scheduleNextTurn(forcedNextBunny = null) {
   turnInfoText.textContent = `턴: ${currentTurn} | 속도: ${(currentInterval / 1000).toFixed(2)}초`;
 
   const doStartTurn = () => startTurn(forcedNextBunny);
-  currentTimeoutId = setTimeout(doStartTurn, currentInterval * 0.25);
+  // ✅ 속도 조정: 0.25 → 0.15
+  currentTimeoutId = setTimeout(doStartTurn, currentInterval * 0.15);
 }
 
 // ---- 턴 시작 ----
@@ -557,7 +559,8 @@ function startGame() {
 
   gameRunning     = true;
   currentTurn     = 0;
-  baseInterval    = 2200;
+  // ✅ 속도 조정: 2200 → 1800
+  baseInterval    = 1800;
   currentInterval = baseInterval;
   requiredAction  = 'none';
   carrotStage     = 0;
